@@ -17,6 +17,7 @@ class LiverApp:
         self.max_images = 9
         self.liver_dataset = 'dataset_liver_bmodes_steatosis_assessment_IJCARS.mat'
         self.histogram_window = None 
+        self.image = None
 
         # create main menu
         menu = tk.Menu(root)
@@ -47,6 +48,7 @@ class LiverApp:
         self.create_selection_frame()
         self.create_navigation_buttons()
         self.create_direct_load_button()
+        self.create_roi_button()
 
     # images navigation -------------------------------------------------------------------------
     def get_patient_number(self):
@@ -124,6 +126,7 @@ class LiverApp:
 
         load_button = tk.Button(button_frame, text="Liver dataset", command=self.load_and_show_liver)
         load_button.grid(row=0, column=0, padx=10)
+
     # upload file menu functions -------------------------------------------------------------------------
     def load_image(self):
         file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg")])
@@ -180,13 +183,62 @@ class LiverApp:
         plt.show()
 
     # image menu functions -----------------------------------------------------------------
-    def view_histogram(self):
-        # Function to view histogram of the image (Placeholder)
-        messagebox.showinfo("View Histogram", "Displaying histogram of the loaded image.")
+    # roi functions
+    def create_roi_button(self):
+        roi_frame = tk.Frame(self.root)
+        roi_frame.pack(pady=20)
+
+        roi_button = tk.Button(roi_frame, text="Select ROI", command=self.select_roi)
+        roi_button.grid(row=0, column=0, padx=10)
+
+    def select_roi(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "No image loaded.")
+            return
+
+        # Usar o matplotlib para interagir com a imagem
+        plt.close('all')  # Fecha qualquer janela anterior
+        fig, ax = plt.subplots()
+        ax.imshow(self.image, cmap='gray')
+        ax.set_title("Select ROI")
+        plt.axis('on')
+
+        # Define a função de retorno de chamada para selecionar a ROI
+        def on_select(event):
+            if event.button == 1:  # Botão esquerdo do mouse
+                x0, y0 = event.xdata, event.ydata
+                roi = plt.ginput(2)  # Pega dois pontos para definir a ROI
+                if len(roi) == 2:
+                    x1, y1 = map(int, roi[1])  # Segundo ponto
+                    x0, y0 = map(int, roi[0])  # Primeiro ponto
+                    self.roi = self.image[y0:y1, x0:x1]  # Corta a ROI
+                    plt.close()  # Fecha a figura após seleção
+
+                    # Exibe a ROI cortada
+                    self.show_cropped_roi()
+
+        # Conecta o evento de clique
+        cid = fig.canvas.mpl_connect('button_press_event', on_select)
+        plt.show()
+
+    def show_cropped_roi(self):
+        if self.roi is not None:
+            plt.figure(figsize=(5, 5))
+            plt.imshow(self.roi, cmap='gray')
+            plt.title("ROI Cropped")
+            plt.axis('off')
+            plt.show()
+        else:
+            messagebox.showwarning("Warning", "No ROI loaded.")
 
     def crop_roi(self):
         # Function to crop a region of interest from the image (Placeholder)
         messagebox.showinfo("Crop ROI", "Select a region of interest to crop and save.")
+
+    #  histogram functions
+    def view_histogram(self):
+        # Function to view histogram of the image (Placeholder)
+        messagebox.showinfo("View Histogram", "Displaying histogram of the loaded image.")
 
     def view_roi_histogram(self):
         # Function to view ROI and its histogram (Placeholder)
