@@ -196,14 +196,12 @@ class LiverApp:
             messagebox.showwarning("Warning", "No image loaded.")
             return
 
-        # Usar o matplotlib para interagir com a imagem
-        plt.close('all')  # Fecha qualquer janela anterior
+        plt.close('all')
         fig, ax = plt.subplots()
         ax.imshow(self.image, cmap='gray')
         ax.set_title("Select ROI")
         plt.axis('on')
 
-        # Define a função de retorno de chamada para selecionar a ROI
         def on_select(event):
             if event.button == 1:  # Botão esquerdo do mouse
                 x0, y0 = event.xdata, event.ydata
