@@ -1,134 +1,116 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
-from tkinter import Menu
-import numpy as np
+import os
 import cv2
-from matplotlib import pyplot as plt
-from skimage.feature import graycomatrix, graycoprops
-from PIL import Image, ImageTk
 import scipy.io
+import numpy as np
+import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+from pathlib import Path
 
-class ImageApp:
+class LiverApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Analisador de Imagens")
-        
-        # Configuração do menu
-        menu_bar = Menu(root)
-        root.config(menu=menu_bar)
-        
-        # Menus
-        file_menu = Menu(menu_bar, tearoff=0)
-        menu_bar.add_cascade(label="Arquivo", menu=file_menu)
-        file_menu.add_command(label="Abrir Imagem", command=self.open_image)
-        file_menu.add_command(label="Abrir Arquivo .MAT", command=self.open_mat)
-        
-        roi_menu = Menu(menu_bar, tearoff=0)
-        menu_bar.add_cascade(label="ROI", menu=roi_menu)
-        roi_menu.add_command(label="Selecionar ROI", command=self.select_roi)
-        roi_menu.add_command(label="Exibir ROIs e Histogramas", command=self.display_rois)
-        
-        texture_menu = Menu(menu_bar, tearoff=0)
-        menu_bar.add_cascade(label="Textura", menu=texture_menu)
-        texture_menu.add_command(label="Calcular GLCM", command=self.compute_glcm)
-        texture_menu.add_command(label="Classificar Imagem", command=self.classify_image)
+        self.root.title("Liver Classifier")
 
-        # Área da imagem
-        self.canvas = tk.Label(root)
-        self.canvas.pack()
-        
-        # Inicializando variáveis
-        self.image = None
-        self.roi = None
-        self.glcm = None
+        # create main menu
+        menu = tk.Menu(root)
+        root.config(menu=menu)
 
-    def open_image(self):
+        # upload file menu
+        file_menu = tk.Menu(menu, tearoff=0)
+        menu.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Load Image (.png, .jpg)", command=self.load_image)
+        file_menu.add_command(label="Load Image (.mat)", command=self.load_mat)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=root.quit)
+
+        # image menu
+        image_menu = tk.Menu(menu, tearoff=0)
+        menu.add_cascade(label="Image", menu=image_menu)
+        image_menu.add_command(label="View Histogram", command=self.view_histogram)
+        image_menu.add_command(label="Crop ROI", command=self.crop_roi)
+        image_menu.add_command(label="View ROI & Histogram", command=self.view_roi_histogram)
+
+        # analysis menu
+        analysis_menu = tk.Menu(menu, tearoff=0)
+        menu.add_cascade(label="Analysis", menu=analysis_menu)
+        analysis_menu.add_command(label="Compute GLCM & Texture Descriptors", command=self.compute_glcm)
+        analysis_menu.add_command(label="Characterize ROI", command=self.characterize_roi)
+        analysis_menu.add_command(label="Classify Image", command=self.classify_image)
+
+    # upload file menu functions -------------------------------------------------------------------------
+    def load_image(self):
         file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg")])
         if file_path:
             self.image = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
             self.display_image(self.image)
             self.show_histogram(self.image)
 
-    def open_mat(self):
+    def load_mat(self):
         file_path = filedialog.askopenfilename(filetypes=[("MAT files", "*.mat")])
         if file_path:
-            mat_data = scipy.io.loadmat(file_path)
-            if 'data' in mat_data:
-                self.data_array = mat_data['data']
+            data = scipy.io.loadmat(file_path)
+            if 'data' in data:
+                self.data_array = data['data']
                 self.images = self.data_array['images']
-                # for n in range(55):
-                #     for m in range(10):
-                #         self.display_image_and_histogram(self.images[0][n][m])
+
+                # values from selection frame
+                n = 1
+                m = 5
+
+                self.image = self.images[0][n][m]
+
+                self.show_image_and_histogram()
+                
             else:
-                messagebox.showerror("Erro", "Arquivo MAT não contém um dado válido.")
+                messagebox.showerror("Erro", ".mat file not valid.")
 
-    def display_image_and_histogram(self, img):
-        # Create a figure with 2 subplots (1 row, 2 columns)
-        fig, axs = plt.subplots(1, 2, figsize=(12, 6))  # Adjust the figsize to make space for both plots
+    def show_image_and_histogram(self):
+        plt.figure(figsize=(10, 5))
 
-        # Display the image on the left subplot (ax[0])
-        axs[0].imshow(img, cmap='gray')  # Use 'gray' for grayscale images
-        axs[0].axis('off')  # Hide axes for better visualization
-        axs[0].set_title('Image')  # Optional: Set a title for the image
+        plt.subplot(1, 2, 1)
+        plt.imshow(self.image, cmap='gray')
+        plt.title("Image")
+        plt.axis('off')
 
-        # Display the histogram on the right subplot (ax[1])
-        axs[1].hist(img.ravel(), bins=256, range=[0, 256])  # Flatten the image array and create the histogram
-        axs[1].set_title('Histogram')  # Set a title for the histogram
-        axs[1].set_xlabel('Pixel Intensity')  # Optional: Label for the x-axis
-        axs[1].set_ylabel('Frequency')  # Optional: Label for the y-axis
+        plt.subplot(1, 2, 2)
+        plt.hist(self.image.ravel(), bins=256, range=(0, 256), color='black')
+        plt.title("Grayscale Histogram")
+        plt.xlabel("Pixel Intensity")
+        plt.ylabel("Frequency")
 
-        # Show the combined figure
-        plt.tight_layout()  # Adjust layout to prevent overlap
+        plt.tight_layout()
         plt.show()
 
-    def select_roi(self):
-        if self.image is None:
-            messagebox.showwarning("Aviso", "Por favor, abra uma imagem primeiro.")
-            return
-        
-        r = cv2.selectROI("Selecione a ROI", self.image)
-        self.roi = self.image[int(r[1]):int(r[1] + r[3]), int(r[0]):int(r[0] + r[2])]
-        cv2.destroyAllWindows()
-        self.display_image(self.roi)
-        self.show_histogram(self.roi)
+    # image menu functions -----------------------------------------------------------------
+    def view_histogram(self):
+        # Function to view histogram of the image (Placeholder)
+        messagebox.showinfo("View Histogram", "Displaying histogram of the loaded image.")
 
-    def display_rois(self):
-        if self.roi is None:
-            messagebox.showwarning("Aviso", "Nenhuma ROI foi selecionada.")
-            return
-        self.display_image(self.roi)
-        self.show_histogram(self.roi)
-    
+    def crop_roi(self):
+        # Function to crop a region of interest from the image (Placeholder)
+        messagebox.showinfo("Crop ROI", "Select a region of interest to crop and save.")
+
+    def view_roi_histogram(self):
+        # Function to view ROI and its histogram (Placeholder)
+        messagebox.showinfo("View ROI & Histogram", "Displaying ROI and its histogram.")
+
+    # analysis menu functions ----------------------------------------------------------------
     def compute_glcm(self):
-        if self.roi is None:
-            messagebox.showwarning("Aviso", "Por favor, selecione uma ROI primeiro.")
-            return
+        # Function to compute GLCM and display texture descriptors (Placeholder)
+        messagebox.showinfo("Compute GLCM", "Computing GLCM and texture descriptors for the ROI.")
 
-        distances = [1]
-        angles = [0]
-        levels = 256
-        self.glcm = greycomatrix(self.roi, distances, angles, levels=levels, symmetric=True, normed=True)
-        
-        contrast = greycoprops(self.glcm, 'contrast')[0, 0]
-        homogeneity = greycoprops(self.glcm, 'homogeneity')[0, 0]
-        energy = greycoprops(self.glcm, 'energy')[0, 0]
-        correlation = greycoprops(self.glcm, 'correlation')[0, 0]
+    def characterize_roi(self):
+        # Function to characterize ROI based on texture descriptor (Placeholder)
+        messagebox.showinfo("Characterize ROI", "Characterizing the ROI with the selected texture descriptor.")
 
-        messagebox.showinfo("GLCM", f"Contraste: {contrast}\nHomogeneidade: {homogeneity}\nEnergia: {energy}\nCorrelação: {correlation}")
-    
     def classify_image(self):
-        # Esta função deverá ser expandida de acordo com o classificador escolhido pelo grupo
-        if self.roi is None:
-            messagebox.showwarning("Aviso", "Por favor, selecione uma ROI primeiro.")
-            return
+        # Function to classify the image based on selected technique (Placeholder)
+        messagebox.showinfo("Classify Image", "Classifying the image and identifying its class.")
 
-        # Aqui, você pode inserir um classificador baseado nos descritores de textura.
-        messagebox.showinfo("Classificação", "A função de classificação será implementada.")
-
-# Inicializando a aplicação
+# create the main window
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ImageApp(root)
-    root.geometry("600x600")
+    app = LiverApp(root)
+    root.geometry("600x400")
     root.mainloop()
-
